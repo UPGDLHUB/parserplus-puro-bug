@@ -5,22 +5,27 @@
  * @version 1.0
  */
 public class TheToken {
-	
-	private String value;
-	private String type;
-	
-	public TheToken(String value, String type) {
-		this.value = value;
-		this.type = type;
-	}
-	
-	public String getValue() {
-		return value;
-	}
-	
-	public String getType() {
-		return type;
-	}
-	
-}
 
+    private String value;
+    private String type;
+    private int lineNumber;
+
+    public TheToken(String value, String type, int lineNumber) {
+        this.value = value;
+        this.type = type;
+        this.lineNumber = lineNumber;
+    }
+
+    public String getValue() {
+        return value;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public int getLineNumber(){
+        return lineNumber;
+    }
+
+}
