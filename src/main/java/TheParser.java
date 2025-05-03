@@ -9,126 +9,124 @@ import java.util.Vector;
 
 public class TheParser {
 
-	public class TheParser {
+	private Vector<SyntaxToken> tokenList;
+	private int tokenPosition;
+	private Map<String, Set<String>> firstSetMap;
+	private Map<String, Set<String>> followSetMap;
 
-	private Vector<TheToken> tokens;
-	private int currentToken;
-	private Map<String, Set<String>> firstSets;
-	private Map<String, Set<String>> followSets;
-
-	public TheParser(Vector<TheToken> tokens) {
-		this.tokens = tokens;
-		currentToken = 0;
-		initializeFirstAndFollowSets();
+	public SyntaxParser(Vector<SyntaxToken> tokenList) {
+		this.tokenList = tokenList;
+		tokenPosition = 0;
+		initializeGrammarSets();
 	}
 	
-	private void initializeFirstAndFollowSets() {
-		firstSets = new HashMap<>();
-		followSets = new HashMap<>();
-		initializeFirstSets();
-		initializeFollowSets();
+	private void initializeGrammarSets() {
+		firstSetMap = new HashMap<>();
+		followSetMap = new HashMap<>();
+		setupFirstSets();
+		setupFollowSets();
 	}
 
-	private void initializeFirstSets() {
-		firstSets.put("PROGRAM", new HashSet<>(Arrays.asList("{", "class")));
-		firstSets.put("METHODS", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean")));
+	private void setupFirstSets() {
+		firstSetMap.put("PROGRAM", new HashSet<>(Arrays.asList("{", "class")));
+		firstSetMap.put("METHODS", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean")));
 		
-		Set<String> paramsFirst = new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean"));
-		paramsFirst.add("");
-		firstSets.put("PARAMS", paramsFirst);
+		Set<String> parameterFirstSet = new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean"));
+		parameterFirstSet.add("");
+		firstSetMap.put("PARAMS", parameterFirstSet);
 		
-		Set<String> bodyFirst = new HashSet<>();
-		bodyFirst.addAll(firstSets.get("METHODS"));
-		bodyFirst.add("IDENTIFIER");
-		bodyFirst.addAll(Arrays.asList("return", "while", "if", "do", "for", "switch", "(", "!", "-", "LITERAL", "break", ""));
-		firstSets.put("BODY", bodyFirst);
+		Set<String> bodyFirstSet = new HashSet<>();
+		bodyFirstSet.addAll(firstSetMap.get("METHODS"));
+		bodyFirstSet.add("IDENTIFIER");
+		bodyFirstSet.addAll(Arrays.asList("return", "while", "if", "do", "for", "switch", "(", "!", "-", "LITERAL", "break", ""));
+		firstSetMap.put("BODY", bodyFirstSet);
 		
-		firstSets.put("VARIABLE", new HashSet<>(firstSets.get("METHODS")));
-		firstSets.put("ASSIGNMENT", new HashSet<>(Collections.singletonList("IDENTIFIER")));
-		firstSets.put("CALL_METHOD", new HashSet<>(Collections.singletonList("IDENTIFIER")));
-		firstSets.put("PARAM_VALUES", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "!", "-", "LITERAL", "")));
-		firstSets.put("RETURN", new HashSet<>(Collections.singletonList("return")));
-		firstSets.put("WHILE", new HashSet<>(Collections.singletonList("while")));
-		firstSets.put("IF", new HashSet<>(Collections.singletonList("if")));
-		firstSets.put("DO_WHILE", new HashSet<>(Collections.singletonList("do")));
-		firstSets.put("FOR", new HashSet<>(Collections.singletonList("for")));
-		firstSets.put("SWITCH", new HashSet<>(Collections.singletonList("switch")));
+		firstSetMap.put("VARIABLE", new HashSet<>(firstSetMap.get("METHODS")));
+		firstSetMap.put("ASSIGNMENT", new HashSet<>(Collections.singletonList("IDENTIFIER")));
+		firstSetMap.put("CALL_METHOD", new HashSet<>(Collections.singletonList("IDENTIFIER")));
+		firstSetMap.put("PARAM_VALUES", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "!", "-", "LITERAL", "")));
+		firstSetMap.put("RETURN", new HashSet<>(Collections.singletonList("return")));
+		firstSetMap.put("WHILE", new HashSet<>(Collections.singletonList("while")));
+		firstSetMap.put("IF", new HashSet<>(Collections.singletonList("if")));
+		firstSetMap.put("DO_WHILE", new HashSet<>(Collections.singletonList("do")));
+		firstSetMap.put("FOR", new HashSet<>(Collections.singletonList("for")));
+		firstSetMap.put("SWITCH", new HashSet<>(Collections.singletonList("switch")));
 		
-		Set<String> stmtBlockFirst = new HashSet<>();
-		stmtBlockFirst.add("{");
-		stmtBlockFirst.addAll(firstSets.get("METHODS"));
-		stmtBlockFirst.add("IDENTIFIER");
-		stmtBlockFirst.addAll(Arrays.asList("return", "while", "if", "do", "for", "switch", "(", "!", "-", "LITERAL"));
-		firstSets.put("STATEMENT_BLOCK", stmtBlockFirst);
+		Set<String> statementBlockFirstSet = new HashSet<>();
+		statementBlockFirstSet.add("{");
+		statementBlockFirstSet.addAll(firstSetMap.get("METHODS"));
+		statementBlockFirstSet.add("IDENTIFIER");
+		statementBlockFirstSet.addAll(Arrays.asList("return", "while", "if", "do", "for", "switch", "(", "!", "-", "LITERAL"));
+		firstSetMap.put("STATEMENT_BLOCK", statementBlockFirstSet);
 		
-		Set<String> exprFirst = new HashSet<>(Arrays.asList("IDENTIFIER", "(", "!", "-", "LITERAL"));
-		firstSets.put("EXPRESSION", exprFirst);
-		firstSets.put("X", new HashSet<>(exprFirst));
+		Set<String> expressionFirstSet = new HashSet<>(Arrays.asList("IDENTIFIER", "(", "!", "-", "LITERAL"));
+		firstSetMap.put("EXPRESSION", expressionFirstSet);
+		firstSetMap.put("X", new HashSet<>(expressionFirstSet));
 		
-		Set<String> yFirst = new HashSet<>(exprFirst);
-		yFirst.add("!");
-		firstSets.put("Y", yFirst);
+		Set<String> logicalTermFirstSet = new HashSet<>(expressionFirstSet);
+		logicalTermFirstSet.add("!");
+		firstSetMap.put("Y", logicalTermFirstSet);
 		
-		firstSets.put("R", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
-		firstSets.put("E", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
-		firstSets.put("A", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
-		firstSets.put("B", new HashSet<>(Arrays.asList("-", "IDENTIFIER", "(", "LITERAL")));
-		firstSets.put("C", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "LITERAL")));
-		firstSets.put("TYPE", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean")));
+		firstSetMap.put("R", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
+		firstSetMap.put("E", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
+		firstSetMap.put("A", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
+		firstSetMap.put("B", new HashSet<>(Arrays.asList("-", "IDENTIFIER", "(", "LITERAL")));
+		firstSetMap.put("C", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "LITERAL")));
+		firstSetMap.put("TYPE", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean")));
 	}
 	
-	private void initializeFollowSets() {
-		followSets.put("PROGRAM", new HashSet<>(Collections.singletonList("$")));
-		followSets.put("METHODS", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean", "}")));
-		followSets.put("PARAMS", new HashSet<>(Collections.singletonList(")")));
-		followSets.put("BODY", new HashSet<>(Arrays.asList("}", "break", "case", "default")));
-		followSets.put("VARIABLE", new HashSet<>(Collections.singletonList(";")));
-		followSets.put("ASSIGNMENT", new HashSet<>(Collections.singletonList(";")));
-		followSets.put("CALL_METHOD", new HashSet<>(Arrays.asList(";", "+", "-", "*", "/", ")", "<", ">", "==", "!=", "&&", "||", ",")));
-		followSets.put("PARAM_VALUES", new HashSet<>(Collections.singletonList(")")));
-		followSets.put("RETURN", new HashSet<>(Arrays.asList("}", "break", "case", "default")));
-		followSets.put("WHILE", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
-		followSets.put("IF", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
-		followSets.put("DO_WHILE", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
-		followSets.put("FOR", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
-		followSets.put("SWITCH", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
-		followSets.put("STATEMENT_BLOCK", new HashSet<>(Arrays.asList("}", ";", "else", "while", "break", "case", "default")));
-		followSets.put("EXPRESSION", new HashSet<>(Arrays.asList(";", ")", ",", ":")));
-		followSets.put("X", new HashSet<>(Arrays.asList(";", ")", ",", ":")));
-		followSets.put("Y", new HashSet<>(Arrays.asList("||", ";", ")", ",", ":")));
-		followSets.put("R", new HashSet<>(Arrays.asList("&&", "||", ";", ")", ",", ":")));
-		followSets.put("E", new HashSet<>(Arrays.asList("<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
-		followSets.put("A", new HashSet<>(Arrays.asList("+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
-		followSets.put("B", new HashSet<>(Arrays.asList("*", "/", "+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
-		followSets.put("C", new HashSet<>(Arrays.asList("*", "/", "+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
-		followSets.put("TYPE", new HashSet<>(Collections.singletonList("IDENTIFIER")));
+	private void setupFollowSets() {
+		followSetMap.put("PROGRAM", new HashSet<>(Collections.singletonList("$")));
+		followSetMap.put("METHODS", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean", "}")));
+		followSetMap.put("PARAMS", new HashSet<>(Collections.singletonList(")")));
+		followSetMap.put("BODY", new HashSet<>(Arrays.asList("}", "break", "case", "default")));
+		followSetMap.put("VARIABLE", new HashSet<>(Collections.singletonList(";")));
+		followSetMap.put("ASSIGNMENT", new HashSet<>(Collections.singletonList(";")));
+		followSetMap.put("CALL_METHOD", new HashSet<>(Arrays.asList(";", "+", "-", "*", "/", ")", "<", ">", "==", "!=", "&&", "||", ",")));
+		followSetMap.put("PARAM_VALUES", new HashSet<>(Collections.singletonList(")")));
+		followSetMap.put("RETURN", new HashSet<>(Arrays.asList("}", "break", "case", "default")));
+		followSetMap.put("WHILE", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSetMap.put("IF", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSetMap.put("DO_WHILE", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSetMap.put("FOR", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSetMap.put("SWITCH", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSetMap.put("STATEMENT_BLOCK", new HashSet<>(Arrays.asList("}", ";", "else", "while", "break", "case", "default")));
+		followSetMap.put("EXPRESSION", new HashSet<>(Arrays.asList(";", ")", ",", ":")));
+		followSetMap.put("X", new HashSet<>(Arrays.asList(";", ")", ",", ":")));
+		followSetMap.put("Y", new HashSet<>(Arrays.asList("||", ";", ")", ",", ":")));
+		followSetMap.put("R", new HashSet<>(Arrays.asList("&&", "||", ";", ")", ",", ":")));
+		followSetMap.put("E", new HashSet<>(Arrays.asList("<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
+		followSetMap.put("A", new HashSet<>(Arrays.asList("+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
+		followSetMap.put("B", new HashSet<>(Arrays.asList("*", "/", "+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
+		followSetMap.put("C", new HashSet<>(Arrays.asList("*", "/", "+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
+		followSetMap.put("TYPE", new HashSet<>(Collections.singletonList("IDENTIFIER")));
 	}
 
-	private boolean isInFirstSetOf(String rule) {
-		if (currentToken >= tokens.size()) return false;
-		String val = tokens.get(currentToken).getValue();
-		String type = tokens.get(currentToken).getType();
-		Set<String> first = firstSets.get(rule);
-		if (first.contains(val) || first.contains(type)) return true;
+	private boolean isTokenInFirstSetOf(String rule) {
+		if (tokenPosition >= tokenList.size()) return false;
+		String value = tokenList.get(tokenPosition).getValue();
+		String type = tokenList.get(tokenPosition).getType();
+		Set<String> firstSet = firstSetMap.get(rule);
+		if (firstSet.contains(value) || firstSet.contains(type)) return true;
 		if ((type.equals("INTEGER") || type.equals("FLOAT") || type.equals("CHAR") || 
 			 type.equals("STRING") || type.equals("HEXADECIMAL") || type.equals("BINARY")) && 
-			first.contains("LITERAL")) return true;
+			firstSet.contains("LITERAL")) return true;
 		return false;
 	}
 	
-	private boolean isInFollowSetOf(String rule) {
-		if (currentToken >= tokens.size()) return followSets.get(rule).contains("$");
-		String val = tokens.get(currentToken).getValue();
-		String type = tokens.get(currentToken).getType();
-		return followSets.get(rule).contains(val) || followSets.get(rule).contains(type);
+	private boolean isTokenInFollowSetOf(String rule) {
+		if (tokenPosition >= tokenList.size()) return followSetMap.get(rule).contains("$");
+		String value = tokenList.get(tokenPosition).getValue();
+		String type = tokenList.get(tokenPosition).getType();
+		return followSetMap.get(rule).contains(value) || followSetMap.get(rule).contains(type);
 	}
 
 	private boolean skipUntilFirstOrFollow(String rule, int errorCode) {
 		error(errorCode);
-		while (currentToken < tokens.size()) {
-			if (isInFirstSetOf(rule)) return true;
-			if (isInFollowSetOf(rule)) return false;
-			currentToken++;
+		while (tokenPosition < tokenList.size()) {
+			if (isTokenInFirstSetOf(rule)) return true;
+			if (isTokenInFollowSetOf(rule)) return false;
+			tokenPosition++;
 		}
 		return false;
 	}
