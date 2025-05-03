@@ -9,8 +9,129 @@ import java.util.Vector;
 
 public class TheParser {
 
+	public class TheParser {
+
 	private Vector<TheToken> tokens;
 	private int currentToken;
+	private Map<String, Set<String>> firstSets;
+	private Map<String, Set<String>> followSets;
+
+	public TheParser(Vector<TheToken> tokens) {
+		this.tokens = tokens;
+		currentToken = 0;
+		initializeFirstAndFollowSets();
+	}
+	
+	private void initializeFirstAndFollowSets() {
+		firstSets = new HashMap<>();
+		followSets = new HashMap<>();
+		initializeFirstSets();
+		initializeFollowSets();
+	}
+
+	private void initializeFirstSets() {
+		firstSets.put("PROGRAM", new HashSet<>(Arrays.asList("{", "class")));
+		firstSets.put("METHODS", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean")));
+		
+		Set<String> paramsFirst = new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean"));
+		paramsFirst.add("");
+		firstSets.put("PARAMS", paramsFirst);
+		
+		Set<String> bodyFirst = new HashSet<>();
+		bodyFirst.addAll(firstSets.get("METHODS"));
+		bodyFirst.add("IDENTIFIER");
+		bodyFirst.addAll(Arrays.asList("return", "while", "if", "do", "for", "switch", "(", "!", "-", "LITERAL", "break", ""));
+		firstSets.put("BODY", bodyFirst);
+		
+		firstSets.put("VARIABLE", new HashSet<>(firstSets.get("METHODS")));
+		firstSets.put("ASSIGNMENT", new HashSet<>(Collections.singletonList("IDENTIFIER")));
+		firstSets.put("CALL_METHOD", new HashSet<>(Collections.singletonList("IDENTIFIER")));
+		firstSets.put("PARAM_VALUES", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "!", "-", "LITERAL", "")));
+		firstSets.put("RETURN", new HashSet<>(Collections.singletonList("return")));
+		firstSets.put("WHILE", new HashSet<>(Collections.singletonList("while")));
+		firstSets.put("IF", new HashSet<>(Collections.singletonList("if")));
+		firstSets.put("DO_WHILE", new HashSet<>(Collections.singletonList("do")));
+		firstSets.put("FOR", new HashSet<>(Collections.singletonList("for")));
+		firstSets.put("SWITCH", new HashSet<>(Collections.singletonList("switch")));
+		
+		Set<String> stmtBlockFirst = new HashSet<>();
+		stmtBlockFirst.add("{");
+		stmtBlockFirst.addAll(firstSets.get("METHODS"));
+		stmtBlockFirst.add("IDENTIFIER");
+		stmtBlockFirst.addAll(Arrays.asList("return", "while", "if", "do", "for", "switch", "(", "!", "-", "LITERAL"));
+		firstSets.put("STATEMENT_BLOCK", stmtBlockFirst);
+		
+		Set<String> exprFirst = new HashSet<>(Arrays.asList("IDENTIFIER", "(", "!", "-", "LITERAL"));
+		firstSets.put("EXPRESSION", exprFirst);
+		firstSets.put("X", new HashSet<>(exprFirst));
+		
+		Set<String> yFirst = new HashSet<>(exprFirst);
+		yFirst.add("!");
+		firstSets.put("Y", yFirst);
+		
+		firstSets.put("R", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
+		firstSets.put("E", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
+		firstSets.put("A", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "-", "LITERAL")));
+		firstSets.put("B", new HashSet<>(Arrays.asList("-", "IDENTIFIER", "(", "LITERAL")));
+		firstSets.put("C", new HashSet<>(Arrays.asList("IDENTIFIER", "(", "LITERAL")));
+		firstSets.put("TYPE", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean")));
+	}
+	
+	private void initializeFollowSets() {
+		followSets.put("PROGRAM", new HashSet<>(Collections.singletonList("$")));
+		followSets.put("METHODS", new HashSet<>(Arrays.asList("int", "float", "void", "char", "string", "boolean", "}")));
+		followSets.put("PARAMS", new HashSet<>(Collections.singletonList(")")));
+		followSets.put("BODY", new HashSet<>(Arrays.asList("}", "break", "case", "default")));
+		followSets.put("VARIABLE", new HashSet<>(Collections.singletonList(";")));
+		followSets.put("ASSIGNMENT", new HashSet<>(Collections.singletonList(";")));
+		followSets.put("CALL_METHOD", new HashSet<>(Arrays.asList(";", "+", "-", "*", "/", ")", "<", ">", "==", "!=", "&&", "||", ",")));
+		followSets.put("PARAM_VALUES", new HashSet<>(Collections.singletonList(")")));
+		followSets.put("RETURN", new HashSet<>(Arrays.asList("}", "break", "case", "default")));
+		followSets.put("WHILE", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSets.put("IF", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSets.put("DO_WHILE", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSets.put("FOR", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSets.put("SWITCH", new HashSet<>(Arrays.asList("}", ";", "else", "break", "case", "default")));
+		followSets.put("STATEMENT_BLOCK", new HashSet<>(Arrays.asList("}", ";", "else", "while", "break", "case", "default")));
+		followSets.put("EXPRESSION", new HashSet<>(Arrays.asList(";", ")", ",", ":")));
+		followSets.put("X", new HashSet<>(Arrays.asList(";", ")", ",", ":")));
+		followSets.put("Y", new HashSet<>(Arrays.asList("||", ";", ")", ",", ":")));
+		followSets.put("R", new HashSet<>(Arrays.asList("&&", "||", ";", ")", ",", ":")));
+		followSets.put("E", new HashSet<>(Arrays.asList("<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
+		followSets.put("A", new HashSet<>(Arrays.asList("+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
+		followSets.put("B", new HashSet<>(Arrays.asList("*", "/", "+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
+		followSets.put("C", new HashSet<>(Arrays.asList("*", "/", "+", "-", "<", ">", "==", "!=", "&&", "||", ";", ")", ",", ":")));
+		followSets.put("TYPE", new HashSet<>(Collections.singletonList("IDENTIFIER")));
+	}
+
+	private boolean isInFirstSetOf(String rule) {
+		if (currentToken >= tokens.size()) return false;
+		String val = tokens.get(currentToken).getValue();
+		String type = tokens.get(currentToken).getType();
+		Set<String> first = firstSets.get(rule);
+		if (first.contains(val) || first.contains(type)) return true;
+		if ((type.equals("INTEGER") || type.equals("FLOAT") || type.equals("CHAR") || 
+			 type.equals("STRING") || type.equals("HEXADECIMAL") || type.equals("BINARY")) && 
+			first.contains("LITERAL")) return true;
+		return false;
+	}
+	
+	private boolean isInFollowSetOf(String rule) {
+		if (currentToken >= tokens.size()) return followSets.get(rule).contains("$");
+		String val = tokens.get(currentToken).getValue();
+		String type = tokens.get(currentToken).getType();
+		return followSets.get(rule).contains(val) || followSets.get(rule).contains(type);
+	}
+
+	private boolean skipUntilFirstOrFollow(String rule, int errorCode) {
+		error(errorCode);
+		while (currentToken < tokens.size()) {
+			if (isInFirstSetOf(rule)) return true;
+			if (isInFollowSetOf(rule)) return false;
+			currentToken++;
+		}
+		return false;
+	}
 
 	public TheParser(Vector<TheToken> tokens) {
 		this.tokens = tokens;
