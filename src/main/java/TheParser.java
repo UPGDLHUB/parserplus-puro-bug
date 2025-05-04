@@ -131,11 +131,6 @@ public class TheParser {
 		return false;
 	}
 
-	public TheParser(Vector<TheToken> tokens) {
-		this.tokens = tokens;
-		currentToken = 0;
-	}
-
 	public void run() {
 		RULE_PROGRAM();
 		if (currentToken != tokens.size()) {
