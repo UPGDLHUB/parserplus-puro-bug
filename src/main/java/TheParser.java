@@ -14,7 +14,7 @@ public class TheParser {
 	private Map<String, Set<String>> firstSetMap;
 	private Map<String, Set<String>> followSetMap;
 
-	public SyntaxParser(Vector<SyntaxToken> tokenList) {
+	public TheParser(Vector<SyntaxToken> tokenList) {
 		this.tokenList = tokenList;
 		tokenPosition = 0;
 		initializeGrammarSets();
