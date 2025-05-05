@@ -1,3 +1,9 @@
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.Vector;
 
 /**
@@ -9,14 +15,14 @@ import java.util.Vector;
 
 public class TheParser {
 
-	private Vector<SyntaxToken> tokenList;
-	private int tokenPosition;
+	private Vector<TheToken> tokens;
+	private int currentToken;
 	private Map<String, Set<String>> firstSetMap;
 	private Map<String, Set<String>> followSetMap;
 
-	public TheParser(Vector<SyntaxToken> tokenList) {
-		this.tokenList = tokenList;
-		tokenPosition = 0;
+	public TheParser(Vector<TheToken> tokens) {
+		this.tokens = tokens;
+		currentToken = 0;
 		initializeGrammarSets();
 	}
 	
@@ -103,30 +109,30 @@ public class TheParser {
 	}
 
 	private boolean isTokenInFirstSetOf(String rule) {
-		if (tokenPosition >= tokenList.size()) return false;
-		String value = tokenList.get(tokenPosition).getValue();
-		String type = tokenList.get(tokenPosition).getType();
+		if (currentToken >= tokens.size()) return false;
+		String value = tokens.get(currentToken).getValue();
+		String type = tokens.get(currentToken).getType();
 		Set<String> firstSet = firstSetMap.get(rule);
 		if (firstSet.contains(value) || firstSet.contains(type)) return true;
 		if ((type.equals("INTEGER") || type.equals("FLOAT") || type.equals("CHAR") || 
-			 type.equals("STRING") || type.equals("HEXADECIMAL") || type.equals("BINARY")) && 
+			type.equals("STRING") || type.equals("HEXADECIMAL") || type.equals("BINARY")) && 
 			firstSet.contains("LITERAL")) return true;
 		return false;
 	}
 	
 	private boolean isTokenInFollowSetOf(String rule) {
-		if (tokenPosition >= tokenList.size()) return followSetMap.get(rule).contains("$");
-		String value = tokenList.get(tokenPosition).getValue();
-		String type = tokenList.get(tokenPosition).getType();
+		if (currentToken >= tokens.size()) return followSetMap.get(rule).contains("$");
+		String value = tokens.get(currentToken).getValue();
+		String type = tokens.get(currentToken).getType();
 		return followSetMap.get(rule).contains(value) || followSetMap.get(rule).contains(type);
 	}
 
 	private boolean skipUntilFirstOrFollow(String rule, int errorCode) {
 		error(errorCode);
-		while (tokenPosition < tokenList.size()) {
+		while (currentToken < tokens.size()) {
 			if (isTokenInFirstSetOf(rule)) return true;
 			if (isTokenInFollowSetOf(rule)) return false;
-			tokenPosition++;
+			currentToken++;
 		}
 		return false;
 	}
