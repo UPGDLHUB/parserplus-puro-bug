@@ -110,13 +110,18 @@ public class TheParser {
 
 	private boolean isTokenInFirstSetOf(String rule) {
 		if (currentToken >= tokens.size()) return false;
+		
 		String value = tokens.get(currentToken).getValue();
 		String type = tokens.get(currentToken).getType();
 		Set<String> firstSet = firstSetMap.get(rule);
+		
 		if (firstSet.contains(value) || firstSet.contains(type)) return true;
+		
+		// Manejo especial para literales
 		if ((type.equals("INTEGER") || type.equals("FLOAT") || type.equals("CHAR") || 
 			type.equals("STRING") || type.equals("HEXADECIMAL") || type.equals("BINARY")) && 
 			firstSet.contains("LITERAL")) return true;
+		
 		return false;
 	}
 	
@@ -138,9 +143,16 @@ public class TheParser {
 	}
 
 	public void run() {
-		RULE_PROGRAM();
-		if (currentToken != tokens.size()) {
-			error(99); // Unexpected tokens at the end
+		try {
+			RULE_PROGRAM();
+			if (currentToken != tokens.size()) {
+				error(99); // Unexpected tokens at the end
+				System.out.println("Recovery: Skipping trailing tokens after valid program");
+			}
+			System.out.println("Parsing completed with recovery.");
+		} catch (Exception e) {
+			System.out.println("Critical error during parsing: " + e.getMessage());
+			e.printStackTrace();
 		}
 	}
 
@@ -206,73 +218,180 @@ public class TheParser {
 
 	private void RULE_METHODS() {
 		System.out.println("----- RULE_METHODS");
+		
+		if (!isTokenInFirstSetOf("METHODS")) {
+			boolean foundFirst = skipUntilFirstOrFollow("METHODS", 700);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping METHODS rule");
+				return;
+			}
+		}
+		
 		RULE_TYPE();
-
-		if (tokens.get(currentToken).getType().equals("IDENTIFIER")) {
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getType().equals("IDENTIFIER")) {
 			System.out.println("----- IDENTIFIER: " + tokens.get(currentToken).getValue());
 			currentToken++;
 		} else {
 			error(8);
+			// Saltar hasta encontrar un "(" o algo en FOLLOW(METHODS)
+			while (currentToken < tokens.size() && 
+				!tokens.get(currentToken).getValue().equals("(") && 
+				!isTokenInFollowSetOf("METHODS")) {
+				currentToken++;
+			}
+			
+			if (currentToken >= tokens.size() || !tokens.get(currentToken).getValue().equals("(")) {
+				System.out.println("Recovered: Missing method name, skipping method declaration");
+				return;
+			}
+			System.out.println("Recovered: Found opening parenthesis after missing method name");
 		}
-
-		if (tokens.get(currentToken).getValue().equals("(")) {
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("(")) {
 			currentToken++;
 			System.out.println("----- (");
 			RULE_PARAMS();
-
-			if (tokens.get(currentToken).getValue().equals(")")) {
+			
+			if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(")")) {
 				currentToken++;
 				System.out.println("----- )");
 			} else {
 				error(9);
+				// Saltar hasta encontrar un "{" o algo en FOLLOW(METHODS)
+				while (currentToken < tokens.size() && 
+					!tokens.get(currentToken).getValue().equals("{") && 
+					!isTokenInFollowSetOf("METHODS")) {
+					currentToken++;
+				}
+				
+				if (currentToken >= tokens.size() || !tokens.get(currentToken).getValue().equals("{")) {
+					System.out.println("Recovered: Missing closing parenthesis, skipping method declaration");
+					return;
+				}
+				System.out.println("Recovered: Found opening brace after missing closing parenthesis");
 			}
-
-			if (tokens.get(currentToken).getValue().equals("{")) {
+			
+			if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("{")) {
 				currentToken++;
 				System.out.println("----- {");
 				RULE_BODY();
-
-				if (tokens.get(currentToken).getValue().equals("}")) {
+				
+				if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("}")) {
 					currentToken++;
 					System.out.println("----- }");
 				} else {
 					error(10);
+					// Saltar hasta algo en FOLLOW(METHODS)
+					while (currentToken < tokens.size() && !isTokenInFollowSetOf("METHODS")) {
+						currentToken++;
+					}
+					System.out.println("Recovered: Missing closing brace, skipping to next method or class end");
 				}
 			} else {
 				error(11);
+				// Saltar hasta algo en FOLLOW(METHODS)
+				while (currentToken < tokens.size() && !isTokenInFollowSetOf("METHODS")) {
+					currentToken++;
+				}
+				System.out.println("Recovered: Missing method body, skipping to next method or class end");
 			}
 		} else {
 			error(12);
+			// Saltar hasta algo en FOLLOW(METHODS)
+			while (currentToken < tokens.size() && !isTokenInFollowSetOf("METHODS")) {
+				currentToken++;
+			}
+			System.out.println("Recovered: Missing method parameter list, skipping to next method or class end");
 		}
 	}
 
 	private void RULE_PARAMS() {
 		System.out.println("------ RULE_PARAMS");
+		
+		// Los parámetros pueden estar vacíos (epsilon), así que verificamos si el token actual es ")"
+		if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(")")) {
+			// Lista de parámetros vacía es válida, no hacer nada
+			return;
+		}
+		
+		if (!isTokenInFirstSetOf("PARAMS")) {
+			boolean foundFirst = skipUntilFirstOrFollow("PARAMS", 600);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping PARAMS rule");
+				return;
+			}
+		}
+		
 		if (isType()) {
 			RULE_TYPE();
-
-			if (tokens.get(currentToken).getType().equals("IDENTIFIER")) {
+			
+			if (currentToken < tokens.size() && tokens.get(currentToken).getType().equals("IDENTIFIER")) {
 				System.out.println("------ IDENTIFIER: " + tokens.get(currentToken).getValue());
 				currentToken++;
 			} else {
 				error(13);
+				// Saltar hasta encontrar una coma o ")" para continuar
+				while (currentToken < tokens.size() && 
+					!tokens.get(currentToken).getValue().equals(",") && 
+					!tokens.get(currentToken).getValue().equals(")")) {
+					currentToken++;
+				}
+				
+				if (currentToken >= tokens.size() || 
+					(!tokens.get(currentToken).getValue().equals(",") && 
+					!tokens.get(currentToken).getValue().equals(")"))) {
+					System.out.println("Recovered: Malformed parameter, skipping parameter list");
+					return;
+				}
+				System.out.println("Recovered: Found comma or closing parenthesis after missing parameter name");
 			}
-
-			while (tokens.get(currentToken).getValue().equals(",")) {
+			
+			while (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(",")) {
 				currentToken++;
 				System.out.println("------ ,");
-
+				
 				if (isType()) {
 					RULE_TYPE();
-
-					if (tokens.get(currentToken).getType().equals("IDENTIFIER")) {
+					
+					if (currentToken < tokens.size() && tokens.get(currentToken).getType().equals("IDENTIFIER")) {
 						System.out.println("------ IDENTIFIER: " + tokens.get(currentToken).getValue());
 						currentToken++;
 					} else {
 						error(14);
+						// Saltar hasta encontrar una coma o ")" para continuar
+						while (currentToken < tokens.size() && 
+							!tokens.get(currentToken).getValue().equals(",") && 
+							!tokens.get(currentToken).getValue().equals(")")) {
+							currentToken++;
+						}
+						
+						if (currentToken >= tokens.size() || 
+							(!tokens.get(currentToken).getValue().equals(",") && 
+							!tokens.get(currentToken).getValue().equals(")"))) {
+							System.out.println("Recovered: Malformed parameter after comma, skipping parameter list");
+							return;
+						}
+						System.out.println("Recovered: Found comma or closing parenthesis after missing parameter name");
 					}
 				} else {
 					error(15);
+					// Saltar hasta encontrar una coma o ")" para continuar
+					while (currentToken < tokens.size() && 
+						!tokens.get(currentToken).getValue().equals(",") && 
+						!tokens.get(currentToken).getValue().equals(")")) {
+						currentToken++;
+					}
+					
+					if (currentToken >= tokens.size() || 
+						(!tokens.get(currentToken).getValue().equals(",") && 
+						!tokens.get(currentToken).getValue().equals(")"))) {
+						System.out.println("Recovered: Missing parameter type after comma, skipping parameter list");
+						return;
+					}
+					System.out.println("Recovered: Found comma or closing parenthesis after missing parameter type");
 				}
 			}
 		}
@@ -359,19 +478,53 @@ public class TheParser {
 
 	private void RULE_ASSIGNMENT() {
 		System.out.println("--- RULE_ASSIGNMENT");
-		if (tokens.get(currentToken).getType().equals("IDENTIFIER")) {
+		
+		if (!isTokenInFirstSetOf("ASSIGNMENT")) {
+			boolean foundFirst = skipUntilFirstOrFollow("ASSIGNMENT", 600);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping ASSIGNMENT rule");
+				return;
+			}
+		}
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getType().equals("IDENTIFIER")) {
 			System.out.println("--- IDENTIFIER: " + tokens.get(currentToken).getValue());
 			currentToken++;
-
-			if (tokens.get(currentToken).getValue().equals("=")) {
+			
+			if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("=")) {
 				currentToken++;
 				System.out.println("--- =");
+				
+				if (!isTokenInFirstSetOf("EXPRESSION")) {
+					boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 601);
+					
+					if (!foundFirst) {
+						System.out.println("Recovered: Missing expression in assignment");
+						return;
+					}
+				}
+				
 				RULE_EXPRESSION();
 			} else {
-				error(23);
+				error(602);
+				// Recuperación: buscar un punto y coma o el siguiente statement
+				while (currentToken < tokens.size() && 
+					!tokens.get(currentToken).getValue().equals(";") && 
+					!isTokenInFollowSetOf("ASSIGNMENT")) {
+					currentToken++;
+				}
+				System.out.println("Recovered: Skipped to next statement after invalid assignment");
 			}
 		} else {
-			error(24);
+			error(603);
+			// Recuperación similar
+			while (currentToken < tokens.size() && 
+				!tokens.get(currentToken).getValue().equals(";") && 
+				!isTokenInFollowSetOf("ASSIGNMENT")) {
+				currentToken++;
+			}
+			System.out.println("Recovered: Skipped to next statement after invalid assignment");
 		}
 	}
 
@@ -415,45 +568,177 @@ public class TheParser {
 
 	private void RULE_RETURN() {
 		System.out.println("--- RULE_RETURN");
-		if (tokens.get(currentToken).getValue().equals("return")) {
+		
+		if (!isTokenInFirstSetOf("RETURN")) {
+			boolean foundFirst = skipUntilFirstOrFollow("RETURN", 800);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping RETURN rule");
+				return;
+			}
+		}
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("return")) {
 			currentToken++;
 			System.out.println("--- return");
-
-			if (!tokens.get(currentToken).getValue().equals(";")) {
+			
+			// Return puede tener una expresión opcional o ser simplemente "return;"
+			if (currentToken < tokens.size() && !tokens.get(currentToken).getValue().equals(";")) {
+				if (!isTokenInFirstSetOf("EXPRESSION")) {
+					boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 801);
+					
+					if (!foundFirst) {
+						// Si encontramos un punto y coma, eso está bien - tratarlo como "return;"
+						if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(";")) {
+							currentToken++;
+							System.out.println("--- ;");
+							return;
+						}
+						
+						// Saltar hasta encontrar un punto y coma o algo en FOLLOW(RETURN)
+						while (currentToken < tokens.size() && 
+							!tokens.get(currentToken).getValue().equals(";") && 
+							!isTokenInFollowSetOf("RETURN")) {
+							currentToken++;
+						}
+						
+						if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(";")) {
+							currentToken++;
+							System.out.println("--- ;");
+						} else {
+							System.out.println("Recovered: Missing expression and semicolon in return statement");
+						}
+						return;
+					}
+				}
+				
 				RULE_EXPRESSION();
 			}
-
-			if (tokens.get(currentToken).getValue().equals(";")) {
+			
+			if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(";")) {
 				currentToken++;
 				System.out.println("--- ;");
 			} else {
 				error(19);
+				// Saltar hasta algo en FOLLOW(RETURN)
+				while (currentToken < tokens.size() && !isTokenInFollowSetOf("RETURN")) {
+					currentToken++;
+				}
+				System.out.println("Recovered: Missing semicolon after return statement");
 			}
 		} else {
 			error(28);
+			// Saltar hasta algo en FOLLOW(RETURN)
+			while (currentToken < tokens.size() && !isTokenInFollowSetOf("RETURN")) {
+				currentToken++;
+			}
+			System.out.println("Recovered: Invalid return statement");
 		}
 	}
 
 	private void RULE_WHILE() {
 		System.out.println("--- RULE_WHILE");
-		if (tokens.get(currentToken).getValue().equals("while")) {
+		
+		if (!isTokenInFirstSetOf("WHILE")) {
+			boolean foundFirst = skipUntilFirstOrFollow("WHILE", 900);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping WHILE rule");
+				return;
+			}
+		}
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("while")) {
 			currentToken++;
 			System.out.println("--- while");
-
-			if (tokens.get(currentToken).getValue().equals("(")) {
+			
+			if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("(")) {
 				currentToken++;
 				System.out.println("--- (");
-				RULE_EXPRESSION();
-
-				if (tokens.get(currentToken).getValue().equals(")")) {
+				
+				if (!isTokenInFirstSetOf("EXPRESSION")) {
+					boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 901);
+					
+					if (!foundFirst) {
+						// Intentar recuperarse buscando el paréntesis de cierre
+						while (currentToken < tokens.size() && 
+							!tokens.get(currentToken).getValue().equals(")")) {
+							currentToken++;
+						}
+						
+						if (currentToken < tokens.size()) {
+							currentToken++; // Saltar el paréntesis de cierre
+							System.out.println("Recovered: Missing condition in while loop");
+						} else {
+							System.out.println("Recovered: Skipping malformed while loop");
+							return;
+						}
+					} else {
+						RULE_EXPRESSION();
+					}
+				} else {
+					RULE_EXPRESSION();
+				}
+				
+				if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(")")) {
 					currentToken++;
 					System.out.println("--- )");
+					
+					if (!isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+						boolean foundFirst = skipUntilFirstOrFollow("STATEMENT_BLOCK", 902);
+						
+						if (!foundFirst) {
+							System.out.println("Recovered: Missing statement block in while loop");
+							return;
+						}
+					}
+					
 					RULE_STATEMENT_BLOCK();
 				} else {
 					error(29);
+					// Intentar recuperarse buscando un bloque de código
+					if (isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+						System.out.println("Recovered: Missing ')' in while condition");
+						RULE_STATEMENT_BLOCK();
+					} else {
+						// Saltar al siguiente statement
+						while (currentToken < tokens.size() && 
+							!isTokenInFollowSetOf("WHILE")) {
+							currentToken++;
+						}
+						System.out.println("Recovered: Skipped malformed while loop");
+					}
 				}
 			} else {
 				error(30);
+				// Intentar recuperarse comprobando si hay una expresión
+				if (isTokenInFirstSetOf("EXPRESSION")) {
+					System.out.println("Recovered: Missing '(' in while condition");
+					RULE_EXPRESSION();
+					
+					if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(")")) {
+						currentToken++;
+						System.out.println("--- )");
+						RULE_STATEMENT_BLOCK();
+					} else if (isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+						System.out.println("Recovered: Missing ')' in while condition");
+						RULE_STATEMENT_BLOCK();
+					} else {
+						// Saltar al siguiente statement
+						while (currentToken < tokens.size() && 
+							!isTokenInFollowSetOf("WHILE")) {
+							currentToken++;
+						}
+						System.out.println("Recovered: Skipped malformed while loop");
+					}
+				} else {
+					// Saltar al siguiente statement
+					while (currentToken < tokens.size() && 
+						!isTokenInFollowSetOf("WHILE")) {
+						currentToken++;
+					}
+					System.out.println("Recovered: Skipped malformed while loop");
+				}
 			}
 		} else {
 			error(31);
@@ -462,136 +747,384 @@ public class TheParser {
 
 	private void RULE_IF() {
 		System.out.println("--- RULE_IF");
-		if (tokens.get(currentToken).getValue().equals("if")) {
+		
+		if (!isTokenInFirstSetOf("IF")) {
+			boolean foundFirst = skipUntilFirstOrFollow("IF", 400);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping IF rule");
+				return;
+			}
+		}
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("if")) {
 			currentToken++;
 			System.out.println("--- if");
 
-			if (tokens.get(currentToken).getValue().equals("(")) {
+			if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("(")) {
 				currentToken++;
 				System.out.println("--- (");
-				RULE_EXPRESSION();
+				
+				// Verificar si hay una expresión válida
+				if (!isTokenInFirstSetOf("EXPRESSION")) {
+					boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 401);
+					if (!foundFirst) {
+						// Intentar recuperarse y continuar
+						System.out.println("Recovered: Missing expression in if condition");
+					}
+				} else {
+					RULE_EXPRESSION();
+				}
 
-				if (tokens.get(currentToken).getValue().equals(")")) {
+				if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(")")) {
 					currentToken++;
 					System.out.println("--- )");
 					
-                    // Procesar el bloque if
 					RULE_STATEMENT_BLOCK();
 
-                    // Verificar si hay un else después del bloque if
 					if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("else")) {
-						currentToken++; // Consumir el token 'else'
+						currentToken++;
 						System.out.println("--- else");
-                        
-                        // Puede ser un else if o un else simple
-                        if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("if")) {
-                            RULE_IF(); // Manejar else if recursivamente
-                        } else {
-                            RULE_STATEMENT_BLOCK(); // Manejar el bloque else
-                        }
+						
+						// Verificar si hay un if después del else (else if)
+						if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("if")) {
+							RULE_IF(); // Manejo recursivo de else-if
+						} else {
+							RULE_STATEMENT_BLOCK();
+						}
 					}
 				} else {
-					error(32);
+					error(402);
+					// Intentar recuperarse y continuar con el bloque de código
+					if (isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+						System.out.println("Recovered: Missing closing parenthesis in if condition");
+						RULE_STATEMENT_BLOCK();
+						
+						// Verificar si hay un else
+						if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("else")) {
+							currentToken++;
+							System.out.println("--- else");
+							
+							if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("if")) {
+								RULE_IF();
+							} else {
+								RULE_STATEMENT_BLOCK();
+							}
+						}
+					}
 				}
 			} else {
-				error(33);
+				error(403);
+				// Intentar recuperarse asumiendo que falta el paréntesis
+				if (isTokenInFirstSetOf("EXPRESSION")) {
+					System.out.println("Recovered: Missing opening parenthesis in if condition");
+					RULE_EXPRESSION();
+					
+					// Buscar un paréntesis de cierre o directamente un bloque
+					if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(")")) {
+						currentToken++;
+						System.out.println("--- )");
+					}
+					
+					// Continuar con el bloque de código
+					if (isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+						RULE_STATEMENT_BLOCK();
+						
+						// Verificar si hay un else
+						if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("else")) {
+							currentToken++;
+							System.out.println("--- else");
+							
+							if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("if")) {
+								RULE_IF();
+							} else {
+								RULE_STATEMENT_BLOCK();
+							}
+						}
+					}
+				}
 			}
 		} else {
-			error(34);
+			error(404);
 		}
 	}
 
 	private void RULE_DO_WHILE() {
 		System.out.println("--- RULE_DO_WHILE");
-		if (tokens.get(currentToken).getValue().equals("do")) {
+		
+		if (!isTokenInFirstSetOf("DO_WHILE")) {
+			boolean foundFirst = skipUntilFirstOrFollow("DO_WHILE", 900);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping DO_WHILE rule");
+				return;
+			}
+		}
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("do")) {
 			currentToken++;
 			System.out.println("--- do");
-			RULE_STATEMENT_BLOCK();
-
-			if (tokens.get(currentToken).getValue().equals("while")) {
+			
+			if (!isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+				boolean foundFirst = skipUntilFirstOrFollow("STATEMENT_BLOCK", 901);
+				
+				if (!foundFirst) {
+					// Saltar hasta "while" o algo en FOLLOW(DO_WHILE)
+					while (currentToken < tokens.size() && 
+						!tokens.get(currentToken).getValue().equals("while") && 
+						!isTokenInFollowSetOf("DO_WHILE")) {
+						currentToken++;
+					}
+					
+					if (currentToken >= tokens.size() || !tokens.get(currentToken).getValue().equals("while")) {
+						System.out.println("Recovered: Missing statement block and while part in do-while loop");
+						return;
+					}
+					System.out.println("Recovered: Found while after missing statement block");
+				} else {
+					RULE_STATEMENT_BLOCK();
+				}
+			} else {
+				RULE_STATEMENT_BLOCK();
+			}
+			
+			if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("while")) {
 				currentToken++;
 				System.out.println("--- while");
-
-				if (tokens.get(currentToken).getValue().equals("(")) {
+				
+				if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("(")) {
 					currentToken++;
 					System.out.println("--- (");
-					RULE_EXPRESSION();
-
-					if (tokens.get(currentToken).getValue().equals(")")) {
+					
+					if (!isTokenInFirstSetOf("EXPRESSION")) {
+						boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 902);
+						
+						if (!foundFirst) {
+							// Saltar a ")" o algo significativo
+							while (currentToken < tokens.size() && 
+								!tokens.get(currentToken).getValue().equals(")") && 
+								!tokens.get(currentToken).getValue().equals(";") && 
+								!isTokenInFollowSetOf("DO_WHILE")) {
+								currentToken++;
+							}
+							
+							if (currentToken >= tokens.size() || 
+								(!tokens.get(currentToken).getValue().equals(")") && 
+								!tokens.get(currentToken).getValue().equals(";"))) {
+								System.out.println("Recovered: Missing condition in do-while loop");
+								return;
+							}
+							System.out.println("Recovered: Found closing parenthesis or semicolon after missing condition");
+						} else {
+							RULE_EXPRESSION();
+						}
+					} else {
+						RULE_EXPRESSION();
+					}
+					
+					if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(")")) {
 						currentToken++;
 						System.out.println("--- )");
-
-						if (tokens.get(currentToken).getValue().equals(";")) {
+						
+						if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(";")) {
 							currentToken++;
 							System.out.println("--- ;");
 						} else {
 							error(35);
+							// Saltar hasta algo en FOLLOW(DO_WHILE)
+							while (currentToken < tokens.size() && !isTokenInFollowSetOf("DO_WHILE")) {
+								currentToken++;
+							}
+							System.out.println("Recovered: Missing semicolon after do-while condition");
 						}
 					} else {
 						error(36);
+						// Intentar recuperarse buscando el punto y coma
+						while (currentToken < tokens.size() && 
+							!tokens.get(currentToken).getValue().equals(";") && 
+							!isTokenInFollowSetOf("DO_WHILE")) {
+							currentToken++;
+						}
+						
+						if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(";")) {
+							currentToken++;
+							System.out.println("Recovered: Found semicolon after missing closing parenthesis");
+						} else {
+							System.out.println("Recovered: Missing closing parenthesis and semicolon in do-while");
+						}
 					}
 				} else {
 					error(37);
+					// Intentar recuperarse saltando al siguiente statement
+					while (currentToken < tokens.size() && !isTokenInFollowSetOf("DO_WHILE")) {
+						currentToken++;
+					}
+					System.out.println("Recovered: Missing condition parentheses in do-while loop");
 				}
 			} else {
 				error(38);
+				// Intentar recuperarse saltando al siguiente statement
+				while (currentToken < tokens.size() && !isTokenInFollowSetOf("DO_WHILE")) {
+					currentToken++;
+				}
+				System.out.println("Recovered: Missing while part in do-while loop");
 			}
 		} else {
 			error(39);
+			// Intentar recuperarse saltando al siguiente statement
+			while (currentToken < tokens.size() && !isTokenInFollowSetOf("DO_WHILE")) {
+				currentToken++;
+			}
+			System.out.println("Recovered: Invalid do-while statement");
 		}
 	}
 
 	private void RULE_FOR() {
 		System.out.println("--- RULE_FOR");
-		if (tokens.get(currentToken).getValue().equals("for")) {
+		
+		if (!isTokenInFirstSetOf("FOR")) {
+			boolean foundFirst = skipUntilFirstOrFollow("FOR", 1000);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping FOR rule");
+				return;
+			}
+		}
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("for")) {
 			currentToken++;
 			System.out.println("--- for");
-
-			if (tokens.get(currentToken).getValue().equals("(")) {
+			
+			if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("(")) {
 				currentToken++;
 				System.out.println("--- (");
-
+				
+				// Inicialización
 				if (isType()) {
 					RULE_VARIABLE();
-				} else if (!tokens.get(currentToken).getValue().equals(";")) {
-					RULE_EXPRESSION();
-				}
-
-				if (tokens.get(currentToken).getValue().equals(";")) {
-					currentToken++;
-					System.out.println("--- ;");
-				} else {
-					error(40);
-				}
-
-				if (!tokens.get(currentToken).getValue().equals(";")) {
-					RULE_EXPRESSION();
-				}
-
-				if (tokens.get(currentToken).getValue().equals(";")) {
-					currentToken++;
-					System.out.println("--- ;");
-				} else {
-					error(41);
-				}
-
-				if (!tokens.get(currentToken).getValue().equals(")")) {
-					if (isAssignment()) {
-						RULE_ASSIGNMENT();
+				} else if (currentToken < tokens.size() && !tokens.get(currentToken).getValue().equals(";")) {
+					if (!isTokenInFirstSetOf("EXPRESSION")) {
+						boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 1001);
+						
+						if (foundFirst) {
+							RULE_EXPRESSION();
+						}
 					} else {
 						RULE_EXPRESSION();
 					}
 				}
-
-				if (tokens.get(currentToken).getValue().equals(")")) {
+				
+				if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(";")) {
+					currentToken++;
+					System.out.println("--- ;");
+				} else {
+					error(40);
+					// Saltar a la siguiente parte del bucle for
+					while (currentToken < tokens.size() && 
+						!tokens.get(currentToken).getValue().equals(";") && 
+						!tokens.get(currentToken).getValue().equals(")")) {
+						currentToken++;
+					}
+					
+					if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(";")) {
+						currentToken++;
+						System.out.println("Recovered: Found next semicolon in for loop");
+					} else {
+						System.out.println("Recovered: Missing semicolon in for loop initialization");
+					}
+				}
+				
+				// Condición
+				if (currentToken < tokens.size() && !tokens.get(currentToken).getValue().equals(";")) {
+					if (!isTokenInFirstSetOf("EXPRESSION")) {
+						boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 1003);
+						
+						if (foundFirst) {
+							RULE_EXPRESSION();
+						}
+					} else {
+						RULE_EXPRESSION();
+					}
+				}
+				
+				if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(";")) {
+					currentToken++;
+					System.out.println("--- ;");
+				} else {
+					error(41);
+					// Saltar hasta el paréntesis de cierre
+					while (currentToken < tokens.size() && 
+						!tokens.get(currentToken).getValue().equals(")")) {
+						currentToken++;
+					}
+					
+					if (currentToken < tokens.size()) {
+						System.out.println("Recovered: Missing semicolon in for loop condition");
+					} else {
+						System.out.println("Recovered: Malformed for loop");
+						return;
+					}
+				}
+				
+				// Incremento
+				if (currentToken < tokens.size() && !tokens.get(currentToken).getValue().equals(")")) {
+					if (isAssignment()) {
+						RULE_ASSIGNMENT();
+					} else if (!isTokenInFirstSetOf("EXPRESSION")) {
+						boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 1005);
+						
+						if (foundFirst) {
+							RULE_EXPRESSION();
+						}
+					} else {
+						RULE_EXPRESSION();
+					}
+				}
+				
+				if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals(")")) {
 					currentToken++;
 					System.out.println("--- )");
+					
+					if (!isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+						boolean foundFirst = skipUntilFirstOrFollow("STATEMENT_BLOCK", 1006);
+						
+						if (!foundFirst) {
+							System.out.println("Recovered: Missing statement block in for loop");
+							return;
+						}
+					}
+					
 					RULE_STATEMENT_BLOCK();
 				} else {
 					error(42);
+					// Intentar recuperarse buscando un bloque de código
+					if (isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+						System.out.println("Recovered: Missing ')' in for loop");
+						RULE_STATEMENT_BLOCK();
+					} else {
+						// Saltar al siguiente statement
+						while (currentToken < tokens.size() && 
+							!isTokenInFollowSetOf("FOR")) {
+							currentToken++;
+						}
+						System.out.println("Recovered: Skipped malformed for loop");
+					}
 				}
 			} else {
 				error(43);
+				// Intentar encontrar un bloque de código y asumir que el bucle for está incompleto
+				while (currentToken < tokens.size() && 
+					!isTokenInFirstSetOf("STATEMENT_BLOCK") && 
+					!isTokenInFollowSetOf("FOR")) {
+					currentToken++;
+				}
+				
+				if (isTokenInFirstSetOf("STATEMENT_BLOCK")) {
+					System.out.println("Recovered: Assuming empty for loop condition");
+					RULE_STATEMENT_BLOCK();
+				} else {
+					System.out.println("Recovered: Skipped malformed for loop");
+				}
 			}
 		} else {
 			error(44);
@@ -750,13 +1283,31 @@ public class TheParser {
 
 	private void RULE_EXPRESSION() {
 		System.out.println("--- RULE_EXPRESSION");
+		
+		if (!isTokenInFirstSetOf("EXPRESSION")) {
+			boolean foundFirst = skipUntilFirstOrFollow("EXPRESSION", 1400);
+			
+			if (!foundFirst) {
+				System.out.println("Recovered: Skipping EXPRESSION rule");
+				return;
+			}
+		}
+		
 		RULE_X();
-
-		while (currentToken < tokens.size() && 
-		       !isEndOfExpression(tokens.get(currentToken).getValue()) && 
-		       tokens.get(currentToken).getValue().equals("||")) {
+		
+		while (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("||")) {
 			currentToken++;
 			System.out.println("--- ||");
+			
+			if (!isTokenInFirstSetOf("X")) {
+				boolean foundFirst = skipUntilFirstOrFollow("X", 1401);
+				
+				if (!foundFirst) {
+					System.out.println("Recovered: Missing operand after ||");
+					break;
+				}
+			}
+			
 			RULE_X();
 		}
 	}
@@ -776,13 +1327,33 @@ public class TheParser {
 
 	private void RULE_Y() {
 		System.out.println("----- RULE_Y");
-		while (currentToken < tokens.size() && 
-		       !isEndOfExpression(tokens.get(currentToken).getValue()) && 
-		       tokens.get(currentToken).getValue().equals("!")) {
+		
+		if (currentToken < tokens.size() && tokens.get(currentToken).getValue().equals("!")) {
 			currentToken++;
 			System.out.println("----- !");
+			
+			if (!isTokenInFirstSetOf("Y")) {
+				boolean foundFirst = skipUntilFirstOrFollow("Y", 1420);
+				
+				if (!foundFirst) {
+					System.out.println("Recovered: Missing operand after !");
+					return;
+				}
+			}
+			
+			RULE_Y(); // Llamada recursiva para manejar múltiples !
+		} else {
+			if (!isTokenInFirstSetOf("R")) {
+				boolean foundFirst = skipUntilFirstOrFollow("R", 1421);
+				
+				if (!foundFirst) {
+					System.out.println("Recovered: Skipping Y rule");
+					return;
+				}
+			}
+			
+			RULE_R();
 		}
-		RULE_R();
 	}
 
 	private void RULE_R() {
@@ -900,12 +1471,14 @@ public class TheParser {
 	// Método para verificar si un token marca el final de una expresión
 	private boolean isEndOfExpression(String tokenValue) {
 		return tokenValue.equals(";") || 
-		       tokenValue.equals(")") || 
-		       tokenValue.equals("}") || 
-		       tokenValue.equals(",") || 
-		       tokenValue.equals(":") || 
-		       tokenValue.equals("else") || 
-		       tokenValue.equals("break");
+            tokenValue.equals(")") || 
+            tokenValue.equals("}") || 
+            tokenValue.equals(",") || 
+            tokenValue.equals(":") || 
+            tokenValue.equals("else") || 
+            tokenValue.equals("break") ||
+            tokenValue.equals("case") ||
+            tokenValue.equals("default");
 	}
 
 	private void RULE_TYPE() {
@@ -1001,9 +1574,9 @@ public class TheParser {
 	}
 
 	private void error(int error) {
-		System.out.println("Error " + error +
+		System.out.println("Syntax Error " + error +
 				" at line " + tokens.get(currentToken).getLineNumber() +
 				", token: " + tokens.get(currentToken).getValue());
-		System.exit(1);
+		//System.exit(1)
 	}
 }
